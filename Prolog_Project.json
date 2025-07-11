@@ -1,0 +1,199 @@
+{
+  "name": "Prolog_Project",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.query }}",
+        "options": {
+          "systemMessage": "You are an agent that converts user messages into Prolog queries based on a predefined set of rules. Your task is to interpret the user's input and generate a Prolog query that can be executed against a movie database. Follow these guidelines to create the Prolog query:\n\n1. **Identify Conditions**: Extract the conditions mentioned by the user. Conditions can include attributes like director, genre, actor, release year, rating, runtime, keyword, original language, adult content, and movie name.\n\n2. **Map Conditions to Predicates**: Use the following mappings to convert the extracted conditions into Prolog predicates:\n   - Director: `has_director(\"DirectorName\")`\n   - Genre: `has_genre(GenreName)`\n   - Actor: `has_actor(\"ActorName\")`\n   - Release Year: `released_in(Year)`\n   - Rating Above: `rating_above(Threshold)`\n   - Rating Below: `rating_below(Threshold)`\n   - Runtime Above: `runtime_above(Minutes)`\n   - Keyword: `has_keyword(\"Keyword\")`\n   - Original Language: `original_language(Language)`\n   - Adult Content: `is_adult`\n   - Movie Name: `movie_name(\"MovieName\")`\n\n3. **Handle Unknown Attributes**: If the user mentions an attribute or instance that is not recognized or cannot be mapped to a known predicate, treat it as an empty condition and use its variable(variable should start with capital letters and not inside double quotes) to avoid errors or false responses.\n\n4. **if any of attribute has more than one value, threat them as array.Do not write them separately.\n\n5. **Construct the Query**: Use the `query_movies/2` predicate to construct the final query. The first argument should be a list of conditions, and the second argument should be the movie ID. For example:\n   ```prolog\n   query_movies([has_director(\"Adam B. Stein\"), has_genre(mystery)], ID), movie_details(ID, Title, Year, Genres, Cast, Director, Keywords).\n\nNote: for movie languages use only two first letter of language name in lower case.\nNote: Avoid any unneccessary symbol specifically back slash (\\)\nNote: Do not create any mapping rule by yourself, always follow step 2."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        -100,
+        -80
+      ],
+      "id": "39a1d6b2-0ef5-49a8-a9c6-1bcb4e14d569",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "mistral-small-latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        120
+      ],
+      "id": "35e22545-faa1-4045-9b2c-0153d90cfe49",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "iXYtJ3wxs1fKhIeg",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:8080/query?ask={{ $json.ask }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        -80
+      ],
+      "id": "4610e5b5-8e18-4f96-9d65-c034128c147e",
+      "name": "Prolog Server"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the raw output from the LLM\nconst rawOutput = items[0].json.query;\n\n\n// URL-encode the full query\nconst encoded = encodeURIComponent(rawOutput);\n\n// Return in the desired structure\nreturn [\n  {\n    json: {\n      ask: encoded\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        40
+      ],
+      "id": "66f07076-4649-446e-9105-23b8aad7f158",
+      "name": "Query Encoder"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat_handler",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        -80
+      ],
+      "id": "b9bc8874-1d29-4d50-9c2f-2f89acb8603c",
+      "name": "NextJS UI",
+      "webhookId": "8bb100df-46e4-46de-a50b-7a7a4ba28f9a"
+    },
+    {
+      "parameters": {
+        "jsCode": "const regex = /```prolog\\s*([\\s\\S]*?)```/i;\n\nreturn $input.all().map(item => {\n  const text = item.json.output; // get the \"output\" field\n  const match = text.match(regex); // extract the query\n  const query = match && match[1] ? match[1].trim() : null;\n\n  return {\n    json: {\n      query: query  // add the extracted Prolog query\n    }\n  };\n});\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -200
+      ],
+      "id": "01724530-9e78-4188-b101-b536dad84394",
+      "name": "Extract Query"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -80
+      ],
+      "id": "6ec780a0-3367-4c7e-92ab-becbf4ea5f98",
+      "name": "Return Data"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Encoder": {
+      "main": [
+        [
+          {
+            "node": "Prolog Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prolog Server": {
+      "main": [
+        [
+          {
+            "node": "Return Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NextJS UI": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Query": {
+      "main": [
+        [
+          {
+            "node": "Query Encoder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f5851c2e-0765-4f69-881c-a07ae91f22fd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b31151455166a3b951993e538d807163c9e87c3be6c181561820d284dffc40a4"
+  },
+  "id": "sHvIpjPgY20AQrqU",
+  "tags": [
+    {
+      "createdAt": "2025-07-02T14:56:20.849Z",
+      "updatedAt": "2025-07-02T14:56:20.849Z",
+      "id": "IuGxR3sdiveAHDMA",
+      "name": "USE POST FOR ADVANCE"
+    }
+  ]
+}
